@@ -23,6 +23,8 @@
                "alias" "alias-command"
                "name" "name-room"} #"\|"))
 
+(def *valid-actions* #{:drop-item :take-item :inventory :move :alias-command :name-room :dig :help :equip :look})
+
 ;; room = (x y z [on-the-ground])
 (def *world-state* {:maze {[0 0 0] #{:sledge}
                            [1 1 5] #{:lots-of-gold}}
@@ -49,10 +51,6 @@
   (split (if-let [t (get target source)] t source) #" "))
 
 ;; ** utilities ** ;;
-(defn callable?
-  "checks if string s corresponds to the name of a function"
-  [s]
-  (resolve (symbol s)))
 
 (defn coord-at
   "given a coordinate (eg. [1 1 1]) and a direction (eg. :north) returns the coordinate for the direction (eg. [1 2 1])"
@@ -354,7 +352,7 @@
           args (rest i)]
       (cond
         (= (first i) "exit") nil
-        (callable? action) (try
+        (contains? *valid-actions* (keyword action)) (try
                              (apply (resolve (symbol action)) (conj args world ))
                              (catch IllegalArgumentException e (println "Invalid arguments") world))
         :else (do (println "What do you mean?") world)))
@@ -362,23 +360,27 @@
       (println "Hm?!")
       world)))
 
-(comment
-(let [sanitized-input (sanitize-input "name asdasd")
-          command (translate (first sanitized-input) (*world-state* :aliases))
-          i (concat command (rest sanitized-input))
-          action (first i)
-          args (rest i)] i))
+(defn help
+  "prints an help message"
+  [world]
+  (do
+    (println "Welcome to the dungeon!")
+    (println "You need a sledge to dig rooms and ladders to go upwards.")
+    (println "Valid commands are: directions (north, south...), dig, take, drop, equip, inventory and look.")
+    (println "Additionally you can tag rooms with the 'name' command and alias commands with 'alias'." )
+    (println "Have fun!")
+    world))
 
 ;; main loop
 (defn run
   "the main game loop"
   []
-  (loop [input (read-line)
-         world *world-state*]
-    (if-let [w (parse-input input world)]
-            (recur (read-line) w)
-            (println "See you next time!"))))
-
-;;(drop-item (drop-item *world-state* "all") "all")
+  (do
+    (println "Welcome to the dungeon!\nGrab the sledge and make your way to room 1,1,5 for a non-existant prize!")
+    (loop [input (read-line)
+           world *world-state*]
+      (if-let [w (parse-input input world)]
+              (recur (read-line) w)
+              (println "See you next time!")))))
 
 (run)
