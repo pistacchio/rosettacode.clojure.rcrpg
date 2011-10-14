@@ -20,7 +20,8 @@
                "e|east" "move east"
                "u|up" "move up"
                "d|down" "move down"
-               "alias" "alias-command"} #"\|"))
+               "alias" "alias-command"
+               "name" "name-room"} #"\|"))
 
 ;; room = (x y z [on-the-ground])
 (def *world-state* {:maze {[0 0 0] #{:sledge}
@@ -28,7 +29,9 @@
                     :inventory #{}
                     :current-room [0 0 0]
                     :equipped nil
-                    :aliases *translation-map*})
+                    :aliases *translation-map*
+                    :named-rooms {[0 0 0] "the starting room"
+                                  [1 1 5] "the prince room"}})
 
 (def *directions* [:north :west :south :east :up :down])
 
@@ -146,7 +149,11 @@
 (defn describe
   "prints a description of room"
   [room world]
-  (println (str "You are at " (join " "  (room-position room)) "." (describe-ground room) (describe-exits room world))))
+  (let [room-name (if-let [r ((world :named-rooms) (room-position room))]
+          (str " (" r ")")
+          nil)]
+    (println (str "You are at " (join " "  (room-position room)) room-name "." (describe-ground room)
+                (describe-exits room world)))))
 
 ;; ** actions ** ;;
 (defn look [world]
@@ -315,6 +322,20 @@
       (println (str "Alias '" alias "' to what?"))
       world)))
 
+(defn name-room
+  "tags the current location with alias"
+  ([world & alias]
+    (let [a (join " " alias)
+          current-named-room (world :named-rooms)
+          current-location (room-position (current-room world))]
+      (do
+        (println "Done!")
+        (assoc world :named-rooms (assoc current-named-room current-location a)))))
+  ([world]
+    (do
+      (println "What name?")
+      world)))
+
 ;; ** user input ** ;;
 
 (defn sanitize-input
@@ -340,6 +361,13 @@
     (do
       (println "Hm?!")
       world)))
+
+(comment
+(let [sanitized-input (sanitize-input "name asdasd")
+          command (translate (first sanitized-input) (*world-state* :aliases))
+          i (concat command (rest sanitized-input))
+          action (first i)
+          args (rest i)] i))
 
 ;; main loop
 (defn run
