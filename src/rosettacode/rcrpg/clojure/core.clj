@@ -19,7 +19,8 @@
                "s|south" "move south"
                "e|east" "move east"
                "u|up" "move up"
-               "d|down" "move down"} #"\|"))
+               "d|down" "move down"
+               "name" "rename"} #"\|"))
 
 ;; room = (x y z [on-the-ground])
 (def *world-state* {:maze {[0 0 0] #{:sledge}
@@ -292,6 +293,21 @@
   ([world]
     (do
       (println "What do you want to equip?")
+      world)))
+
+(defn rename
+  "aliases command to alias"
+  ([world alias & commands]
+    (let [command (join " " commands)
+          current-aliases (world :aliases)]
+      (assoc world :aliases (assoc current-aliases alias command))))
+  ([world]
+    (do
+      (println "Alias what?")
+      world))
+  ([world alias]
+    (do
+      (println (str "Alias '" alias "' to what?"))
       world)))
 
 ;; ** user input ** ;;
