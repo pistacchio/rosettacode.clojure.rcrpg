@@ -12,7 +12,7 @@
 
 (def *translation-map*
   (split-keys {"drop" "drop-item"
-               "take" "take-item"
+               "get|take" "take-item"
                "i|inv" "inventory"
                "n|north" "move north"
                "w|west" "move west"
@@ -20,7 +20,7 @@
                "e|east" "move east"
                "u|up" "move up"
                "d|down" "move down"
-               "name" "rename"} #"\|"))
+               "alias" "alias-command"} #"\|"))
 
 ;; room = (x y z [on-the-ground])
 (def *world-state* {:maze {[0 0 0] #{:sledge}
@@ -182,7 +182,10 @@
           target-coord (coord-at (room-position (current-room world)) dir)]
       (if-valid-direction dir
         (if (exit? (current-room world) world dir)
-          (do
+          (if (and (= dir :up) (not ((room-ground (current-room world)) :ladder)))
+            (do
+              (println "You cannot go up if there's no ladder in the room.")
+              world)
             (let [updated-world (assoc world :current-room target-coord)]
               (describe (current-room updated-world) updated-world)
               updated-world))
@@ -295,12 +298,14 @@
       (println "What do you want to equip?")
       world)))
 
-(defn rename
+(defn alias-command
   "aliases command to alias"
   ([world alias & commands]
     (let [command (join " " commands)
           current-aliases (world :aliases)]
-      (assoc world :aliases (assoc current-aliases alias command))))
+      (do
+        (println (str "Alias created for the command " command))
+        (assoc world :aliases (assoc current-aliases alias command)))))
   ([world]
     (do
       (println "Alias what?")
