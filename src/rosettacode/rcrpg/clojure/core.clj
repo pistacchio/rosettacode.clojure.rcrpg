@@ -87,18 +87,13 @@
   [world direction]
   [(coord-at (world :current-room) direction) (hash-set (rand-nth [:gold :sledge :ladder]))])
 
-(defn if-valid-direction
+(defn valid-direction
   "fn if direction is valid, otherwise prints an error message, else fnelse"
-  [direction fn fnelse]
-  (if-not (in? *directions* direction)
-    (do
-      (println "Where?!")
-      fnelse)
-    fn))
+  [direction]
+  (in? *directions* direction))
 
 ;; ** describing rooms ** ;;
 
-;; find adjacent exits
 (defn find-exits
   "returns a list of directions with the exit directions for room, eg. (:north :east)"
   [room world]
@@ -141,8 +136,7 @@
   [room]
   (let [room-content (room-ground room)]
   (if  (not-empty room-content)
-     (str
-       " On the ground you can see: " (describe-items room-content) "."))))
+     (str " On the ground you can see: " (describe-items room-content) "."))))
 
 (defn describe
   "prints a description of room"
@@ -150,72 +144,64 @@
   (let [room-name (if-let [r ((world :named-rooms) (room-position room))]
           (str " (" r ")")
           nil)]
-    (println (str "You are at " (join " "  (room-position room)) room-name "." (describe-ground room)
-                (describe-exits room world)))))
+    (str "You are at "
+      (join " "  (room-position room))
+      room-name "."
+      (describe-ground room)
+      (describe-exits room world))))
+
+(defn perform-action
+  [world action args]
+  (let [result (apply (resolve (symbol action)) (conj args world ))]
+    (cond
+      (string? result) (do (println result) world)
+      (vector? result) (do (println (first result)) (second result) ))))
 
 ;; ** actions ** ;;
+
 (defn look [world]
   "describes the room the player is in"
-  (describe (current-room world) world)
-  world)
+  (describe (current-room world) world))
 
 (defn dig
   "digs a new room towards direction if there's not a room already and the player has a sledge"
   ([world direction]
     (let [dir (keyword direction)]
-      (if-valid-direction dir
+      (if (valid-direction dir)
         (if (exit? (current-room world) world dir)
-          (do
-            (println "There is already a room!")
-            world)
+          "There is already a room!"
           (if (= (world :equipped) :sledge)
-            (do
-              (println (str "You dig a new room " direction "ward."))
-              (assoc world :maze (merge (world :maze) (new-room-at world dir))))
-            (do
-              (println "You need to equip a sledge in order to dig the wall!")
-              world)))
-        world)))
-  ([world]
-    (println "Where do you want to dig?")
-    world))
+            [(str "You dig a new room " direction "ward.")
+              (assoc world :maze (merge (world :maze) (new-room-at world dir)))]
+            "You need to equip a sledge in order to dig the wall!"))
+        "Where?!")))
+  ([world] "Where do you want to dig?"))
 
 (defn move
   "moves the player to an adjacent room and describes it"
   ([world direction]
     (let [dir (keyword direction)
           target-coord (coord-at (room-position (current-room world)) dir)]
-      (if-valid-direction dir
+      (if (valid-direction dir)
         (if (exit? (current-room world) world dir)
           (if (and (= dir :up) (not ((room-ground (current-room world)) :ladder)))
-            (do
-              (println "You cannot go up if there's no ladder in the room.")
-              world)
+            "You cannot go up if there's no ladder in the room."
             (let [updated-world (assoc world :current-room target-coord)]
-              (describe (current-room updated-world) updated-world)
-              updated-world))
-          (do
-            (println "There's no exit in that direction!")
-            world))
-        world)))
-  ([world]
-    (println "Where do you want to go?")
-    world))
+              [(describe (current-room updated-world) updated-world)
+               updated-world]))
+          "There's no exit in that direction!")
+        "Where?!")))
+  ([world] "Where do you want to go?"))
 
 (defn equip
   "equips an item if specified and if the player has it in her inventory"
   ([world item]
     (let [i (keyword item)]
       (if (in-inv? world i)
-        (do
-          (println "Equipped!")
-          (assoc world :equipped i))
-        (do
-          (println "You haven't such an item")
-          world))))
-  ([world]
-    (println "What do you want to equip?")
-    world))
+        ["Equipped!"
+         (assoc world :equipped i)])
+        "You haven't such an item"))
+  ([world] "What do you want to equip?"))
 
 (defn drop-item
   "drops an item in the inventory or all of them leaving it in the room"
@@ -228,26 +214,19 @@
           update-room (partial assoc current-maze current-position)
           equipped-item (world :equipped)]
       (if (= i :all)
-        (do
-          (println "Everything dropped!")
-          (assoc world
+        ["Everything dropped!"
+         (assoc world
             :equipped nil
             :inventory #{}
-            :maze (update-room (clojure.set/union current-ground current-inventory))))
-        (do
-          (if (in-inv? world i)
-            (do
-              (println "Item dropped!")
-              (assoc world
-                :equipped (if (= equipped-item i) nil equipped-item)
-                :inventory (disj current-inventory i)
-                :maze (update-room (conj current-ground i))))
-            (do
-              (println "You haven't such an item")
-              world))))))
-  ([world]
-    (println "What do you want to drop?")
-    world))
+            :maze (update-room (clojure.set/union current-ground current-inventory)))]
+        (if (in-inv? world i)
+          ["Item dropped!"
+           (assoc world
+             :equipped (if (= equipped-item i) nil equipped-item)
+             :inventory (disj current-inventory i)
+             :maze (update-room (conj current-ground i)))]
+          "You haven't such an item"))))
+  ([world] "What do you want to drop?"))
 
 (defn take-item
   "picks up an item from the ground or all of them putting them into the inventory"
@@ -260,65 +239,43 @@
           update-room (partial assoc current-maze current-position)
           equipped-item (world :equipped)]
       (if (= i :all)
-        (do
-          (println "Everything taken!")
-          (assoc world
-            :inventory (clojure.set/union current-inventory current-ground)
-            :maze (update-room #{})))
-        (do
-          (if (in? current-ground i)
-            (do
-              (println "Item taken!")
-              (assoc world
-                :inventory (current-inventory i)
-                :maze (update-room (disj current-ground i))))
-            (do
-              (println "There is not such item on the ground!")
-              world))))))
-  ([world]
-    (println "What do you want to pick up?")
-    world))
+        ["Everything taken!"
+         (assoc world
+           :inventory (clojure.set/union current-inventory current-ground)
+           :maze (update-room #{}))]
+        (if (in? current-ground i)
+          ["Item taken!"
+           (assoc world
+             ;;:inventory (clojure.set/union current-inventory #{i})
+              :inventory (conj current-inventory i)
+             :maze (update-room (disj current-ground i)))]
+          "There is not such item on the ground!"))))
+  ([world] "What do you want to pick up?"))
 
 (defn inventory
   "prints what the player is carrying"
   [world]
   (let [inv (world :inventory)]
-    (println (if (empty? inv)
-               "You are not carrying anything"
-               (str "You are carrying: " (describe-items inv)))))
-    world)
+    (if (empty? inv)
+       "You are not carrying anything"
+       (str "You are carrying: " (describe-items inv)))))
 
 (defn equip
   ([world item]
     (let [i (keyword item)]
       (if (in-inv? world i)
-        (do
-          (println "Item equipped.")
-          (assoc world :equipped i))
-        (do
-          (println "You haven't such item")
-          world))))
-  ([world]
-    (do
-      (println "What do you want to equip?")
-      world)))
+        ["Item equipped." (assoc world :equipped i)]
+        "You haven't such item")))
+  ([world] "What do you want to equip?"))
 
 (defn alias-command
   "aliases command to alias"
   ([world alias & commands]
     (let [command (join " " commands)
           current-aliases (world :aliases)]
-      (do
-        (println (str "Alias created for the command " command))
-        (assoc world :aliases (assoc current-aliases alias command)))))
-  ([world]
-    (do
-      (println "Alias what?")
-      world))
-  ([world alias]
-    (do
-      (println (str "Alias '" alias "' to what?"))
-      world)))
+      [(str "Alias created for the command " command) (assoc world :aliases (assoc current-aliases alias command))]))
+  ([world] "Alias what?")
+  ([world alias] (str "Alias '" alias "' to what?")))
 
 (defn name-room
   "tags the current location with alias"
@@ -326,13 +283,18 @@
     (let [a (join " " alias)
           current-named-room (world :named-rooms)
           current-location (room-position (current-room world))]
-      (do
-        (println "Done!")
-        (assoc world :named-rooms (assoc current-named-room current-location a)))))
-  ([world]
-    (do
-      (println "What name?")
-      world)))
+      ["Done!" (assoc world :named-rooms (assoc current-named-room current-location a))]))
+  ([world]  "What name?"))
+
+(defn help
+  "prints an help message"
+  [world]
+  (str
+    "Welcome to the dungeon!\n"
+    "You need a sledge to dig rooms and ladders to go upwards.\n"
+    "Valid commands are: directions (north, south...), dig, take, drop, equip, inventory and look.\n"
+    "Additionally you can tag rooms with the 'name' command and alias commands with 'alias'.\n"
+    "Have fun!\n"))
 
 ;; ** user input ** ;;
 
@@ -348,28 +310,16 @@
     (let [sanitized-input (sanitize-input input)
           command (translate (first sanitized-input) (world :aliases))
           i (concat command (rest sanitized-input))
-          action (first i)
-          args (rest i)]
+          [action & args] i]
       (cond
         (= (first i) "exit") nil
-        (contains? *valid-actions* (keyword action)) (try
-                             (apply (resolve (symbol action)) (conj args world ))
-                             (catch IllegalArgumentException e (println "Invalid arguments") world))
+        (contains? *valid-actions* (keyword action))
+          (try (perform-action world action args)
+          (catch IllegalArgumentException e (println "Invalid arguments") world))
         :else (do (println "What do you mean?") world)))
     (do
       (println "Hm?!")
       world)))
-
-(defn help
-  "prints an help message"
-  [world]
-  (do
-    (println "Welcome to the dungeon!")
-    (println "You need a sledge to dig rooms and ladders to go upwards.")
-    (println "Valid commands are: directions (north, south...), dig, take, drop, equip, inventory and look.")
-    (println "Additionally you can tag rooms with the 'name' command and alias commands with 'alias'." )
-    (println "Have fun!")
-    world))
 
 ;; main loop
 (defn run
