@@ -23,7 +23,14 @@
                "alias" "alias-command"
                "name" "name-room"} #"\|"))
 
-(def *valid-actions* #{:drop-item :take-item :inventory :move :alias-command :name-room :dig :help :equip :look})
+(def *base-valid-actions* #{:drop-item :take-item :inventory :move :alias-command :name-room :dig :help :equip :look})
+
+(defn valid-actions
+  [aliases]
+  (into #{}
+    (concat
+      (map keyword (keys aliases))
+      *base-valid-actions*)))
 
 ;; room = (x y z [on-the-ground])
 (def *world-state* {:maze {[0 0 0] #{:sledge}
@@ -73,7 +80,7 @@
   (second room))
 
 (defn in?
-  "returns true if k is in coll"
+  "returns true if k is in sequence"
   [coll k]
   (some #{k} coll))
 
@@ -246,8 +253,7 @@
         (if (in? current-ground i)
           ["Item taken!"
            (assoc world
-             ;;:inventory (clojure.set/union current-inventory #{i})
-              :inventory (conj current-inventory i)
+             :inventory (conj current-inventory i)
              :maze (update-room (disj current-ground i)))]
           "There is not such item on the ground!"))))
   ([world] "What do you want to pick up?"))
@@ -310,10 +316,11 @@
     (let [sanitized-input (sanitize-input input)
           command (translate (first sanitized-input) (world :aliases))
           i (concat command (rest sanitized-input))
-          [action & args] i]
+          [action & args] i
+          current-valid-actions (world :aliases)]
       (cond
         (= (first i) "exit") nil
-        (contains? *valid-actions* (keyword action))
+        (contains? (valid-actions current-valid-actions) (keyword action))
           (try (perform-action world action args)
           (catch IllegalArgumentException e (println "Invalid arguments") world))
         :else (do (println "What do you mean?") world)))
