@@ -26,6 +26,7 @@
 (def *base-valid-actions* #{:drop-item :take-item :inventory :move :alias-command :name-room :dig :help :equip :look})
 
 (defn valid-actions
+  "returns all the callable actions from base ones, aliases and user-defined"
   [aliases]
   (into #{}
     (concat
@@ -158,6 +159,8 @@
       (describe-exits room world))))
 
 (defn perform-action
+  "executes action with args providing it with world state. if the function returns a string, prints it and return
+ world. if function returns [string updated-world], prints string and return updated-world"
   [world action args]
   (let [result (apply (resolve (symbol action)) (conj args world ))]
     (cond
